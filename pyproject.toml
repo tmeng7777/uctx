@@ -7,10 +7,13 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
     "mcp>=1.2.0",
+    "starlette>=0.37",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]
 uctx = "uctx.server:main"
+uctx-web = "uctx.web:main"
 
 [build-system]
 requires = ["hatchling"]

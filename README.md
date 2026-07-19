@@ -81,6 +81,18 @@ Add the same server under **Settings → MCP → Add** (command `uv`, args
 `--directory /ABSOLUTE/PATH/TO/uctx run uctx`). Point it at the **same folder**
 as Claude and they share one store.
 
+## Web UI — see & manage your context
+
+A local dashboard for the same store your agents use — view, search, add, and
+delete anything, so you can *see* what's been remembered about you (and delete
+what shouldn't be).
+
+```bash
+uv run uctx-web        # then open http://127.0.0.1:8787
+```
+
+Reads/writes the same `~/.uctx/context.db`. Localhost-only, single-user.
+
 ## Tools
 
 | Tool | What it does |
