@@ -24,6 +24,29 @@ No cloud. No account. The data is a file on your machine (`~/.uctx/context.db`).
 
 Two different agents, one shared memory you control. That's the whole idea.
 
+## Or run the demo right now (no agent setup)
+
+```bash
+uv sync
+uv run python examples/two_agents_demo.py
+```
+
+```text
+Agent A = 'claude-desktop'  — saves what the user tells it:
+  [claude-desktop] save_context('Prefers Python, tabs over spaces') -> Saved context #1
+  [claude-desktop] save_context('Based in Boston')                  -> Saved context #2
+  [claude-desktop] save_context('Learning agentic frameworks')      -> Saved context #3
+
+---- Switch apps. Brand-new agent, same local store, no shared chat. ----
+
+Agent B = 'cursor'  — recalls it without ever seeing the above:
+  [cursor] search_context('coding')
+        -> #1 [preference] Prefers Python, tabs over spaces  ·tags: coding style  ·from claude-desktop
+=>  Two different agents. One context you own.
+```
+
+Two separate MCP clients, one local store — the cross-app share, proven in one command.
+
 ## Install
 
 Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
