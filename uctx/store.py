@@ -70,6 +70,30 @@ def search(query: str, limit: int = 10) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def update(item_id: int, content: str | None = None, type: str | None = None,
+           tags: list[str] | None = None) -> bool:
+    """Update one item's content/type/tags (only the fields you pass). Returns True if a row changed."""
+    sets: list[str] = []
+    vals: list[Any] = []
+    if content is not None:
+        if not content.strip():
+            raise ValueError("content must not be empty")
+        sets.append("content = ?")
+        vals.append(content.strip())
+    if type is not None:
+        sets.append("type = ?")
+        vals.append(type)
+    if tags is not None:
+        sets.append("tags = ?")
+        vals.append(" ".join(t.strip() for t in tags if t.strip()))
+    if not sets:
+        return False
+    vals.append(item_id)
+    with _conn() as conn:
+        cur = conn.execute(f"UPDATE context SET {', '.join(sets)} WHERE id = ?", vals)
+        return cur.rowcount > 0
+
+
 def list_all(limit: int = 50) -> list[dict[str, Any]]:
     with _conn() as conn:
         rows = conn.execute(

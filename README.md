@@ -83,8 +83,10 @@ as Claude and they share one store.
 
 ## Web UI — see & manage your context
 
-A local dashboard for the same store your agents use — view, search, add, and
-delete anything, so you can *see* what's been remembered about you (and delete
+![uctx web UI preview](docs/preview.svg)
+
+A local dashboard for the same store your agents use — view, search, add, **edit**,
+and delete anything, so you can *see* what's been remembered about you (and change
 what shouldn't be).
 
 ```bash

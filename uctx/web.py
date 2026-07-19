@@ -1,8 +1,8 @@
 """uctx web UI — a local dashboard for your context store.
 
-See, add, search, and delete everything your agents remember about you. Reads
-and writes the SAME local store (~/.uctx/context.db) the MCP server uses, so
-what you see here is exactly what Claude / Cursor see.
+See, add, edit, search, and delete everything your agents remember about you.
+Reads and writes the SAME local store (~/.uctx/context.db) the MCP server uses,
+so what you see here is exactly what Claude / Cursor see.
 
 Run:  uctx-web        (installed script)
   or: python -m uctx.web
@@ -22,6 +22,12 @@ from starlette.routing import Route
 from . import store
 
 
+def _norm_tags(tags):
+    if isinstance(tags, str):
+        return [t for t in tags.replace(",", " ").split() if t]
+    return tags or []
+
+
 async def index(_request):
     return HTMLResponse(PAGE)
 
@@ -37,11 +43,19 @@ async def api_add(request):
     content = (data.get("content") or "").strip()
     if not content:
         return JSONResponse({"error": "content is required"}, status_code=400)
-    tags = data.get("tags") or []
-    if isinstance(tags, str):
-        tags = [t for t in tags.replace(",", " ").split() if t]
-    item_id = store.save(content, type=data.get("type", "note"), tags=tags, source_app="uctx-web")
+    item_id = store.save(content, type=data.get("type", "note"),
+                         tags=_norm_tags(data.get("tags")), source_app="uctx-web")
     return JSONResponse({"id": item_id})
+
+
+async def api_update(request):
+    data = await request.json()
+    content = data.get("content")
+    if content is not None and not content.strip():
+        return JSONResponse({"error": "content cannot be empty"}, status_code=400)
+    ok = store.update(int(request.path_params["item_id"]), content=content,
+                      type=data.get("type"), tags=_norm_tags(data.get("tags")) if "tags" in data else None)
+    return JSONResponse({"updated": ok})
 
 
 async def api_delete(request):
@@ -53,6 +67,7 @@ routes = [
     Route("/", index),
     Route("/api/context", api_list, methods=["GET"]),
     Route("/api/context", api_add, methods=["POST"]),
+    Route("/api/context/{item_id:int}", api_update, methods=["PUT"]),
     Route("/api/context/{item_id:int}", api_delete, methods=["DELETE"]),
 ]
 
@@ -92,20 +107,24 @@ input,select,textarea,button{font:inherit;color:inherit}
 button{cursor:pointer;border:1px solid var(--border);background:var(--card);border-radius:9px;padding:9px 14px}
 button.primary{background:var(--accent);color:#fff;border-color:transparent}
 .add{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:18px;display:none;gap:10px;flex-direction:column}
-.add textarea{width:100%;min-height:60px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);resize:vertical}
-.add .row{display:flex;gap:8px}
-.add select,.add input{padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
-.add input{flex:1}
+.add.open{display:flex}
+textarea{width:100%;min-height:60px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+select,.tags{padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg)}
+.tags{flex:1;min-width:120px}
 .count{color:var(--muted);font-size:13px;margin:0 0 10px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px;position:relative}
-.card .content{font-size:15px;margin:0 0 6px;padding-right:28px}
+.card .content{font-size:15px;margin:0 0 6px;padding-right:56px}
 .badge{display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;
   color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:1px 6px;margin-right:6px}
 .chip{display:inline-block;font-size:12px;background:var(--chip);border-radius:20px;padding:1px 9px;margin-right:5px;color:var(--muted)}
 .meta{color:var(--muted);font-size:12px;margin-top:7px}
-.del{position:absolute;top:10px;right:10px;border:none;background:none;color:var(--muted);font-size:18px;line-height:1;padding:2px 6px;border-radius:6px}
-.del:hover{color:var(--danger);background:var(--chip)}
+.actions{position:absolute;top:10px;right:10px;display:flex;gap:2px}
+.icon{border:none;background:none;color:var(--muted);font-size:15px;line-height:1;padding:3px 6px;border-radius:6px}
+.icon:hover{background:var(--chip)}
+.icon.del:hover{color:var(--danger)}
 .empty{color:var(--muted);text-align:center;padding:40px 0}
+.edit{display:flex;flex-direction:column;gap:8px}
 </style></head><body><div class="wrap">
 <h1>Your context</h1>
 <p class="sub">Everything your agents remember — stored locally, owned by you.</p>
@@ -117,7 +136,7 @@ button.primary{background:var(--accent);color:#fff;border-color:transparent}
   <textarea id="content" placeholder="Something to remember, e.g. 'I prefer Python and tabs over spaces'"></textarea>
   <div class="row">
     <select id="type"><option value="preference">preference</option><option value="fact">fact</option><option value="note" selected>note</option></select>
-    <input id="tags" placeholder="tags (space or comma separated)">
+    <input class="tags" id="tags" placeholder="tags (space or comma separated)">
     <button class="primary" id="saveBtn">Save</button>
   </div>
 </div>
@@ -126,30 +145,54 @@ button.primary{background:var(--accent);color:#fff;border-color:transparent}
 </div>
 <script>
 const $=s=>document.querySelector(s);
-const esc=s=>(s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const TYPES=["preference","fact","note"];
+let items=[];
+function typeSelect(sel){return '<select class="etype">'+TYPES.map(t=>'<option'+(t===sel?' selected':'')+'>'+t+'</option>').join("")+'</select>';}
+function cardHTML(i){
+  const tags=(i.tags||"").split(" ").filter(Boolean).map(t=>'<span class="chip">'+esc(t)+'</span>').join("");
+  return '<div class="card" data-id="'+i.id+'">'+
+    '<div class="actions"><button class="icon edit" title="Edit">&#9998;</button>'+
+    '<button class="icon del" title="Delete">&times;</button></div>'+
+    '<p class="content"><span class="badge">'+esc(i.type)+'</span>'+esc(i.content)+'</p>'+
+    tags+'<div class="meta">from '+esc(i.source_app)+' · '+esc((i.created_at||"").slice(0,10))+' · #'+i.id+'</div></div>';
+}
+function editHTML(i){
+  return '<div class="card" data-id="'+i.id+'"><div class="edit">'+
+    '<textarea class="econtent">'+esc(i.content)+'</textarea>'+
+    '<div class="row">'+typeSelect(i.type)+
+    '<input class="tags etags" value="'+esc(i.tags||"")+'" placeholder="tags">'+
+    '<button class="primary esave">Save</button><button class="ecancel">Cancel</button>'+
+    '</div></div></div>';
+}
 async function load(){
   const q=$("#q").value.trim();
   const r=await fetch("/api/context"+(q?"?q="+encodeURIComponent(q):""));
-  const items=await r.json();
+  items=await r.json();
   $("#count").textContent=items.length+(q?" match"+(items.length==1?"":"es"):" item"+(items.length==1?"":"s"));
-  if(!items.length){$("#list").innerHTML='<div class="empty">'+(q?"No matches.":"Nothing saved yet. Add something, or let an agent do it.")+'</div>';return;}
-  $("#list").innerHTML=items.map(i=>{
-    const tags=(i.tags||"").split(" ").filter(Boolean).map(t=>'<span class="chip">'+esc(t)+'</span>').join("");
-    return '<div class="card"><button class="del" data-id="'+i.id+'" title="Delete">×</button>'+
-      '<p class="content"><span class="badge">'+esc(i.type)+'</span>'+esc(i.content)+'</p>'+
-      tags+'<div class="meta">from '+esc(i.source_app)+' · '+esc((i.created_at||"").slice(0,10))+' · #'+i.id+'</div></div>';
-  }).join("");
+  $("#list").innerHTML=items.length?items.map(cardHTML).join(""):
+    '<div class="empty">'+(q?"No matches.":"Nothing saved yet. Add something, or let an agent do it.")+'</div>';
 }
-$("#addBtn").onclick=()=>{const f=$("#addForm");f.style.display=f.style.display==="flex"?"none":"flex";if(f.style.display==="flex")$("#content").focus();};
+$("#addBtn").onclick=()=>{const f=$("#addForm");f.classList.toggle("open");if(f.classList.contains("open"))$("#content").focus();};
 $("#saveBtn").onclick=async()=>{
   const content=$("#content").value.trim();if(!content)return;
   await fetch("/api/context",{method:"POST",headers:{"content-type":"application/json"},
     body:JSON.stringify({content,type:$("#type").value,tags:$("#tags").value})});
-  $("#content").value="";$("#tags").value="";$("#addForm").style.display="none";load();
+  $("#content").value="";$("#tags").value="";$("#addForm").classList.remove("open");load();
 };
-$("#list").onclick=async e=>{const b=e.target.closest(".del");if(!b)return;
-  if(!confirm("Delete this?"))return;
-  await fetch("/api/context/"+b.dataset.id,{method:"DELETE"});load();};
+$("#list").onclick=async e=>{
+  const card=e.target.closest(".card");if(!card)return;
+  const id=+card.dataset.id;
+  if(e.target.closest(".del")){if(confirm("Delete this?")){await fetch("/api/context/"+id,{method:"DELETE"});load();}return;}
+  if(e.target.closest(".edit")){card.outerHTML=editHTML(items.find(i=>i.id===id));return;}
+  if(e.target.closest(".ecancel")){load();return;}
+  if(e.target.closest(".esave")){
+    const content=card.querySelector(".econtent").value.trim();if(!content)return;
+    await fetch("/api/context/"+id,{method:"PUT",headers:{"content-type":"application/json"},
+      body:JSON.stringify({content,type:card.querySelector(".etype").value,tags:card.querySelector(".etags").value})});
+    load();return;
+  }
+};
 let t;$("#q").oninput=()=>{clearTimeout(t);t=setTimeout(load,180);};
 load();
 </script></body></html>"""
