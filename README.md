@@ -95,6 +95,27 @@ uv run uctx-web        # then open http://127.0.0.1:8787
 
 Reads/writes the same `~/.uctx/context.db`. Localhost-only, single-user.
 
+## Sync — your context on every device (you own the file)
+
+Point uctx at a folder your own cloud already syncs (Dropbox, iCloud Drive,
+Google Drive) or a git repo. Your context travels with you — and **you** hold the
+file, not a uctx server.
+
+```bash
+uctx-sync set ~/Dropbox/uctx     # once, per machine
+uctx-sync                        # pull others' changes in, push yours out
+```
+
+Each machine keeps its own fast local SQLite store and shares a portable
+`context.jsonl` snapshot through the folder. (We sync JSONL, **not** the raw
+`.db`, because cloud tools corrupt live SQLite files — this stays safe,
+human-readable, and git-diffable.)
+
+**v0 limitation:** sync is additive/union and dedupes by content — **edits and
+deletes don't propagate yet.** That needs stable per-item UUIDs + tombstones
+(roadmap). Encryption of the synced file (so the provider can't read it) is the
+planned next step.
+
 ## Tools
 
 | Tool | What it does |

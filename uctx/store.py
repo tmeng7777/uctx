@@ -107,3 +107,33 @@ def forget(item_id: int) -> bool:
     with _conn() as conn:
         cur = conn.execute("DELETE FROM context WHERE id = ?", (item_id,))
         return cur.rowcount > 0
+
+
+def bulk_import(items: list[dict[str, Any]]) -> int:
+    """Merge items (from a synced export) into the store, preserving their
+    original created_at / source_app. Dedupes by (content, type) so re-importing
+    is a no-op. Returns the number of new rows added.
+
+    Note (v0): this is additive union only. Edits and deletes do NOT propagate —
+    that needs stable per-item UUIDs + tombstones (see roadmap).
+    """
+    added = 0
+    with _conn() as conn:
+        existing = {(r["content"], r["type"]) for r in conn.execute("SELECT content, type FROM context")}
+        for it in items:
+            content = (it.get("content") or "").strip()
+            if not content:
+                continue
+            key = (content, it.get("type", "note"))
+            if key in existing:
+                continue
+            conn.execute(
+                "INSERT INTO context (type, content, tags, source_app, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (it.get("type", "note"), content, it.get("tags", ""),
+                 it.get("source_app", "imported"),
+                 it.get("created_at") or datetime.now(timezone.utc).isoformat()),
+            )
+            existing.add(key)
+            added += 1
+    return added
