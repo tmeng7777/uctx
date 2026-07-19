@@ -69,17 +69,17 @@ def sync() -> dict:
     return {"pulled": pulled, "total": total, "file": str(path)}
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(prog="uctx-sync", description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(prog="uctx sync", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="cmd")
     p_set = sub.add_parser("set", help="choose the synced folder")
     p_set.add_argument("folder")
     sub.add_parser("pull", help="merge the synced file into your local store")
     sub.add_parser("push", help="write your local store out to the synced file")
     sub.add_parser("status", help="show the current sync file")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.cmd == "set":
         print(f"Sync folder set. Your context will travel via:\n  {set_sync_dir(args.folder)}")

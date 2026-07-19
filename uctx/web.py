@@ -19,6 +19,7 @@ from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
+from . import setup as setup_mod
 from . import store
 from . import sync as sync_mod
 
@@ -83,6 +84,17 @@ async def api_sync_run(_request):
         return JSONResponse({"error": str(exc)}, status_code=400)
 
 
+async def api_setup_status(_request):
+    return JSONResponse(setup_mod.status())
+
+
+async def api_setup_connect(request):
+    try:
+        return JSONResponse(setup_mod.connect(request.path_params["key"]))
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
 routes = [
     Route("/", index),
     Route("/api/context", api_list, methods=["GET"]),
@@ -92,6 +104,8 @@ routes = [
     Route("/api/sync", api_sync_status, methods=["GET"]),
     Route("/api/sync", api_sync_run, methods=["POST"]),
     Route("/api/sync/dir", api_sync_set, methods=["POST"]),
+    Route("/api/setup", api_setup_status, methods=["GET"]),
+    Route("/api/setup/{key}", api_setup_connect, methods=["POST"]),
 ]
 
 app = Starlette(routes=routes)
@@ -128,6 +142,8 @@ h1{font-size:22px;margin:0 0 2px}
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
 .sync .path{color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;flex:1;min-width:120px}
 .sync .res{color:var(--ok)}
+.sync .ok{color:var(--ok)}
+.sync .off{color:var(--muted)}
 .sync input{flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:inherit}
 .bar{display:flex;gap:8px;margin-bottom:16px}
 input,select,textarea,button{font:inherit;color:inherit}
@@ -157,6 +173,7 @@ select,.tags{padding:9px 10px;border:1px solid var(--border);border-radius:9px;b
 </style></head><body><div class="wrap">
 <h1>Your context</h1>
 <p class="sub">Everything your agents remember — stored locally, owned by you.</p>
+<div class="sync" id="conns"></div>
 <div class="sync" id="sync"></div>
 <div class="bar">
   <input id="q" placeholder="Search your context…" autocomplete="off">
@@ -203,6 +220,14 @@ async function load(){
   $("#list").innerHTML=items.length?items.map(cardHTML).join(""):
     '<div class="empty">'+(q?"No matches.":"Nothing saved yet. Add something, or let an agent do it.")+'</div>';
 }
+async function loadConns(){
+  const c=await (await fetch("/api/setup")).json();
+  $("#conns").innerHTML='<span>🔌 Connect your agents:</span>'+c.map(x=>{
+    if(x.connected) return '<span class="ok">✓ '+esc(x.name)+'</span>';
+    if(!x.installed) return '<span class="off">'+esc(x.name)+' (not found)</span>';
+    return '<button class="sm" data-conn="'+x.key+'">Connect '+esc(x.name)+'</button>';
+  }).join("  ");
+}
 async function loadSync(){
   const s=await (await fetch("/api/sync")).json();
   if(s.configured){
@@ -215,6 +240,11 @@ async function loadSync(){
   }
 }
 document.addEventListener("click",async e=>{
+  if(e.target.dataset.conn){
+    e.target.disabled=true;e.target.textContent="Connecting…";
+    await fetch("/api/setup/"+e.target.dataset.conn,{method:"POST"});
+    await loadConns();return;
+  }
   if(e.target.id==="syncEnable"){
     const folder=$("#syncDir").value.trim();if(!folder)return;
     await fetch("/api/sync/dir",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({folder})});
@@ -249,5 +279,5 @@ $("#list").onclick=async e=>{
   }
 };
 let t;$("#q").oninput=()=>{clearTimeout(t);t=setTimeout(load,180);};
-load();loadSync();
+load();loadSync();loadConns();
 </script></body></html>"""

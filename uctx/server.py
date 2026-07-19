@@ -72,8 +72,45 @@ def forget_context(item_id: int) -> str:
     return f"Deleted context #{item_id}." if ok else f"No context found with id #{item_id}."
 
 
-def main() -> None:
+def run_server() -> None:
     mcp.run()
+
+
+HELP = """uctx — portable, local, user-owned context
+
+Usage:
+  uctx                       run the MCP server (what your AI agents call)
+  uctx setup [claude|cursor] wire uctx into your AI clients (auto-config)
+  uctx web                   open the local dashboard (view/edit/sync context)
+  uctx sync [set|pull|push]  sync your context across devices
+  uctx --version
+"""
+
+
+def main() -> None:
+    import sys
+
+    args = sys.argv[1:]
+    if not args or args[0] in ("serve", "server"):
+        run_server()
+        return
+    cmd = args[0]
+    if cmd in ("-h", "--help", "help"):
+        print(HELP)
+    elif cmd in ("-V", "--version", "version"):
+        from . import __version__
+        print(f"uctx {__version__}")
+    elif cmd == "setup":
+        from .setup import main as setup_main
+        setup_main(args[1:])
+    elif cmd == "web":
+        from .web import main as web_main
+        web_main()
+    elif cmd == "sync":
+        from .sync import main as sync_main
+        sync_main(args[1:])
+    else:
+        print(f"uctx: unknown command {cmd!r} — try `uctx --help`")
 
 
 if __name__ == "__main__":

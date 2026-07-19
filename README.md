@@ -47,39 +47,36 @@ Agent B = 'cursor'  — recalls it without ever seeing the above:
 
 Two separate MCP clients, one local store — the cross-app share, proven in one command.
 
-## Install
+## Install (two commands)
 
-Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/) (Python 3.10+).
 
 ```bash
-git clone https://github.com/<you>/uctx.git
-cd uctx
-uv sync
-uv run uctx        # starts the MCP server (Ctrl-C to stop)
+uv tool install git+https://github.com/tmeng7777/uctx.git   # installs the `uctx` command
+uctx setup                                                  # auto-wire Claude Desktop + Cursor
 ```
 
-## Wire it into your agents
+`uctx setup` detects your MCP clients, backs up their configs, and adds the uctx
+server — no hand-editing JSON. Then **restart the app(s)** to load the tools.
 
-### Claude Desktop
-Edit `claude_desktop_config.json` (Settings → Developer → Edit Config) and add:
+Just want to try it without installing? `uvx --from git+https://github.com/tmeng7777/uctx.git uctx web`.
+
+The `uctx` command:
+
+```
+uctx                        run the MCP server (what your agents call)
+uctx setup [claude|cursor]  wire uctx into your AI clients
+uctx web                    open the local dashboard
+uctx sync [set|pull|push]   sync your context across devices
+```
+
+### Manual config (fallback)
+If you'd rather edit JSON, add this to Claude Desktop's `claude_desktop_config.json`
+(Settings → Developer → Edit Config) or Cursor's `~/.cursor/mcp.json`:
 
 ```json
-{
-  "mcpServers": {
-    "uctx": {
-      "command": "uv",
-      "args": ["--directory", "/ABSOLUTE/PATH/TO/uctx", "run", "uctx"]
-    }
-  }
-}
+{ "mcpServers": { "uctx": { "command": "uctx", "args": [] } } }
 ```
-
-Restart Claude Desktop. You'll see the `uctx` tools appear.
-
-### Cursor
-Add the same server under **Settings → MCP → Add** (command `uv`, args
-`--directory /ABSOLUTE/PATH/TO/uctx run uctx`). Point it at the **same folder**
-as Claude and they share one store.
 
 ## Web UI — see & manage your context
 
