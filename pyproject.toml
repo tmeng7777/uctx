@@ -9,6 +9,10 @@ dependencies = [
     "mcp>=1.2.0",
 ]
 
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+gemini = ["google-genai>=1.0"]
+
 [project.scripts]
 uctx = "uctx.server:main"
 

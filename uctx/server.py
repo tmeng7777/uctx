@@ -13,14 +13,20 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 
 from . import store
+from .embeddings import get_embedder
 
 mcp = FastMCP("uctx")
+
+# Configured once at startup via $UCTX_EMBEDDER; None => keyword search.
+_embedder = get_embedder()
 
 
 def _fmt(item: dict) -> str:
     line = f"#{item['id']} [{item['type']}] {item['content']}"
     if item.get("tags"):
         line += f"  ·tags: {item['tags']}"
+    if "score" in item:
+        line += f"  ·score {item['score']}"
     line += f"  ·from {item['source_app']} @ {item['created_at'][:10]}"
     return line
 
@@ -39,7 +45,8 @@ def save_context(content: str, type: str = "note", tags: list[str] | None = None
         tags: Optional short keywords to aid later search (e.g. ["coding", "style"]).
         source_app: The app/agent saving this (e.g. "claude-desktop", "cursor").
     """
-    item_id = store.save(content, type=type, tags=tags, source_app=source_app)
+    embedding = _embedder([content])[0] if _embedder else None
+    item_id = store.save(content, type=type, tags=tags, source_app=source_app, embedding=embedding)
     return f"Saved context #{item_id}: {content}"
 
 
@@ -50,7 +57,10 @@ def search_context(query: str, limit: int = 10) -> str:
     Call this BEFORE answering questions about the user's preferences, background, or history,
     so your answer reflects what they've told other agents — not just this conversation.
     """
-    items = store.search(query, limit=limit)
+    if _embedder:
+        items = store.semantic_search(_embedder([query])[0], limit=limit)
+    else:
+        items = store.search(query, limit=limit)
     if not items:
         return f"No saved context matched '{query}'."
     return "\n".join(_fmt(i) for i in items)
